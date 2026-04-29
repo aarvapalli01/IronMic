@@ -424,7 +424,7 @@ export function DictatePage() {
   // Broadcast live typing for collaboration (80 ms throttle) while user edits.
   useEffect(() => {
     if (!collabActive || !editor) return;
-    const content = editor.getText();
+    const content = editor.getHTML();
     if (lastRemoteContentRef.current === content) return;
     if (draftThrottleRef.current) clearTimeout(draftThrottleRef.current);
     draftThrottleRef.current = setTimeout(() => {
@@ -448,7 +448,7 @@ export function DictatePage() {
     if (!collabActive || !editor) return;
     autosaveIntervalRef.current = setInterval(() => {
       if (!collabDirtyRef.current) return;
-      const content = editor.getText();
+      const content = editor.getHTML();
       const name = (() => { try { return localStorage.getItem('ironmic-collab-display-name') || 'Host'; } catch { return 'Host'; } })();
       if (collabRoleRef.current === 'host') {
         window.ironmic?.meetingCollabNotifySaved?.(content, name)?.catch(() => {});
@@ -465,14 +465,13 @@ export function DictatePage() {
     };
   }, [collabActive, editor]);
 
-  // Apply incoming draft content when we're a participant (no local server running).
+  // Apply incoming draft content for both host and participant.
   useEffect(() => {
     const unsub = window.ironmic?.onMeetingCollabDraft?.((data: any) => {
-      if (collabRoleRef.current === 'host') return;
       if (editor && data?.content != null) {
         const content = String(data.content);
         lastRemoteContentRef.current = content;
-        const html = `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
+        const html = content.trim().startsWith('<') ? content : `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
         editor.commands.setContent(html, false);
         collabDirtyRef.current = false;
       }
@@ -486,7 +485,8 @@ export function DictatePage() {
       if (editor && data?.notes) {
         const content = String(data.notes);
         lastRemoteContentRef.current = content;
-        editor.commands.setContent(`<p>${content.replace(/\n/g, '</p><p>')}</p>`);
+        const html = content.trim().startsWith('<') ? content : `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
+        editor.commands.setContent(html, false);
         collabDirtyRef.current = false;
       }
     });
@@ -1103,12 +1103,18 @@ export function DictatePage() {
       {collabOpen && (
         <NotesCollaborateModal
           noteId={entryId}
-          initialNotes={editor?.getText() ?? ''}
+          initialNotes={editor?.getHTML() ?? ''}
           onNotesUpdated={(notes) => {
-            if (editor) editor.commands.setContent(`<p>${notes.replace(/\n/g, '</p><p>')}</p>`);
+            if (editor) {
+              const html = notes.trim().startsWith('<') ? notes : `<p>${notes.replace(/\n/g, '</p><p>')}</p>`;
+              editor.commands.setContent(html, false);
+            }
           }}
           onJoined={({ notes }) => {
-            if (editor) editor.commands.setContent(`<p>${notes.replace(/\n/g, '</p><p>')}</p>`);
+            if (editor) {
+              const html = notes.trim().startsWith('<') ? notes : `<p>${notes.replace(/\n/g, '</p><p>')}</p>`;
+              editor.commands.setContent(html, false);
+            }
           }}
           onClose={() => setCollabOpen(false)}
         />

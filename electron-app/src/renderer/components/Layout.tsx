@@ -8,7 +8,6 @@ import { RecordingIndicator } from './RecordingIndicator';
 import { Timeline } from './Timeline';
 import { SettingsPanel } from './SettingsPanel';
 import { AIChat } from './AIChat';
-import { NotesPage } from './NotesPage';
 import { SearchPage } from './SearchPage';
 import { WelcomePage } from './WelcomePage';
 import { ListenPage } from './ListenPage';

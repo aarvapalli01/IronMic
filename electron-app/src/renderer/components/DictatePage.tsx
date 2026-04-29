@@ -111,6 +111,10 @@ export function DictatePage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collabActiveRef = useRef(false);
+  const collabRoleRef = useRef<'host' | 'client' | null>(null);
+  const collabDirtyRef = useRef(false);
+  const autosaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastRemoteContentRef = useRef<string | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [saved, setSaved] = useState(true);
@@ -405,33 +409,72 @@ export function DictatePage() {
   // Track live collab session state for the button indicator.
   useEffect(() => {
     const unsub = window.ironmic?.onMeetingCollabState?.((info: any) => {
-      const active = info?.active ?? false;
+      const active = Boolean(info?.active ?? info?.connected);
+      const role: 'host' | 'client' | null = active
+        ? (info?.active != null ? 'host' : 'client')
+        : null;
       setCollabActive(active);
       collabActiveRef.current = active;
+      collabRoleRef.current = role;
       setCollabParticipantCount(info?.participants?.length ?? 0);
     });
     return () => { unsub?.(); };
   }, []);
 
-  // Broadcast host keystrokes to participants as live draft events (300 ms throttle).
+  // Broadcast live typing for collaboration (80 ms throttle) while user edits.
   useEffect(() => {
     if (!collabActive || !editor) return;
+    const content = editor.getText();
+    if (lastRemoteContentRef.current === content) return;
     if (draftThrottleRef.current) clearTimeout(draftThrottleRef.current);
     draftThrottleRef.current = setTimeout(() => {
-      const content = editor.getText();
       const name = (() => { try { return localStorage.getItem('ironmic-collab-display-name') || 'Host'; } catch { return 'Host'; } })();
-      window.ironmic?.meetingCollabNotifySaved?.(content, name)?.catch(() => {});
-    }, 300);
+      if (collabRoleRef.current === 'host') {
+        window.ironmic?.meetingCollabNotifyDraft?.(content, name)?.catch(() => {});
+      } else if (collabRoleRef.current === 'client') {
+        window.ironmic?.meetingCollabSendDraft?.(content)?.catch(() => {});
+      }
+      collabDirtyRef.current = true;
+    }, 80);
     return () => { if (draftThrottleRef.current) clearTimeout(draftThrottleRef.current); };
   }, [charCount, collabActive, editor]);
+
+  // Autosave collaboration content every ~25 seconds (inside requested 20-30s).
+  useEffect(() => {
+    if (autosaveIntervalRef.current) {
+      clearInterval(autosaveIntervalRef.current);
+      autosaveIntervalRef.current = null;
+    }
+    if (!collabActive || !editor) return;
+    autosaveIntervalRef.current = setInterval(() => {
+      if (!collabDirtyRef.current) return;
+      const content = editor.getText();
+      const name = (() => { try { return localStorage.getItem('ironmic-collab-display-name') || 'Host'; } catch { return 'Host'; } })();
+      if (collabRoleRef.current === 'host') {
+        window.ironmic?.meetingCollabNotifySaved?.(content, name)?.catch(() => {});
+      } else if (collabRoleRef.current === 'client') {
+        window.ironmic?.meetingCollabSaveNotes?.(content)?.catch(() => {});
+      }
+      collabDirtyRef.current = false;
+    }, 25000);
+    return () => {
+      if (autosaveIntervalRef.current) {
+        clearInterval(autosaveIntervalRef.current);
+        autosaveIntervalRef.current = null;
+      }
+    };
+  }, [collabActive, editor]);
 
   // Apply incoming draft content when we're a participant (no local server running).
   useEffect(() => {
     const unsub = window.ironmic?.onMeetingCollabDraft?.((data: any) => {
-      if (collabActiveRef.current) return; // we're the host, ignore
+      if (collabRoleRef.current === 'host') return;
       if (editor && data?.content != null) {
-        const html = `<p>${String(data.content).replace(/\n/g, '</p><p>')}</p>`;
+        const content = String(data.content);
+        lastRemoteContentRef.current = content;
+        const html = `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
         editor.commands.setContent(html, false);
+        collabDirtyRef.current = false;
       }
     });
     return () => { unsub?.(); };
@@ -441,7 +484,10 @@ export function DictatePage() {
   useEffect(() => {
     const unsub = window.ironmic?.onMeetingCollabNotesUpdated?.((data: any) => {
       if (editor && data?.notes) {
-        editor.commands.setContent(`<p>${String(data.notes).replace(/\n/g, '</p><p>')}</p>`);
+        const content = String(data.notes);
+        lastRemoteContentRef.current = content;
+        editor.commands.setContent(`<p>${content.replace(/\n/g, '</p><p>')}</p>`);
+        collabDirtyRef.current = false;
       }
     });
     return () => { unsub?.(); };

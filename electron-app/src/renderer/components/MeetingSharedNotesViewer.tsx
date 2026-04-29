@@ -13,6 +13,7 @@ import type { CollabParticipant } from './MeetingCollaboratePanel';
 
 interface Props {
   hostName: string | null;
+  title: string | null;
   initialNotes: string;
   participants: CollabParticipant[];
   onLeave: () => void;
@@ -20,12 +21,14 @@ interface Props {
 
 export function MeetingSharedNotesViewer({
   hostName,
+  title: initialTitle,
   initialNotes,
   participants: initialParticipants,
   onLeave,
 }: Props) {
   const [notes, setNotes] = useState(initialNotes);
   const [participants, setParticipants] = useState<CollabParticipant[]>(initialParticipants);
+  const [sessionTitle, setSessionTitle] = useState(initialTitle);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(initialNotes);
   const [saving, setSaving] = useState(false);
@@ -41,6 +44,7 @@ export function MeetingSharedNotesViewer({
       setNotes(data.notes ?? '');
       setDraft(data.notes ?? '');
       setSavedBy(data.savedBy ?? null);
+      if (data.title) setSessionTitle(data.title);
       setTimeout(() => setSavedBy(null), 3000);
     });
 
@@ -48,6 +52,7 @@ export function MeetingSharedNotesViewer({
     const unsubState = window.ironmic?.onMeetingCollabState?.((info: any) => {
       setConnected(info?.connected ?? false);
       setParticipants(info?.participants ?? []);
+      if (info?.title) setSessionTitle(info.title);
     });
 
     // Draft preview from another participant
@@ -114,7 +119,7 @@ export function MeetingSharedNotesViewer({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-iron-text truncate">
-                {hostName ? `${hostName}'s Meeting` : 'Shared Meeting'}
+                {sessionTitle || (hostName ? `${hostName}'s Meeting` : 'Shared Meeting')}
               </p>
               {connected ? (
                 <span className="flex items-center gap-1 text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded-full">

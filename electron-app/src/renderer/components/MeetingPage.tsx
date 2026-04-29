@@ -54,6 +54,7 @@ export function MeetingPage() {
   const [sharedNotesData, setSharedNotesData] = useState<{
     hostName: string | null;
     notes: string;
+    title: string | null;
     participants: CollabParticipant[];
   } | null>(null);
 
@@ -200,6 +201,7 @@ export function MeetingPage() {
       const { info, notes } = result as any;
       setSharedNotesData({
         hostName: info?.hostName ?? null,
+        title: info?.title ?? null,
         notes: notes ?? '',
         participants: info?.participants ?? [],
       });
@@ -903,6 +905,7 @@ export function MeetingPage() {
     return (
       <MeetingSharedNotesViewer
         hostName={sharedNotesData.hostName}
+        title={sharedNotesData.title}
         initialNotes={sharedNotesData.notes}
         participants={sharedNotesData.participants}
         onLeave={() => setSharedNotesData(null)}

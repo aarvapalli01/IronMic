@@ -21,6 +21,7 @@ interface Props {
   sessionId: string;
   /** Current notes text (passed so server can send to new joiners). */
   currentNotes: string;
+  title: string;
   hostName: string;
   onClose: () => void;
   /** Called when a participant saves notes — host should apply the new content. */
@@ -30,6 +31,7 @@ interface Props {
 export function MeetingCollaboratePanel({
   sessionId,
   currentNotes,
+  title,
   hostName,
   onClose,
   onNotesUpdated,
@@ -58,6 +60,7 @@ export function MeetingCollaboratePanel({
           sessionId,
           hostName || 'Host',
           currentNotes,
+          title
         );
         if (!cancelled) setCollabInfo(info);
       } catch (err: any) {

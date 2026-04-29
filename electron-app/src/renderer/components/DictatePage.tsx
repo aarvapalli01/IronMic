@@ -417,6 +417,10 @@ export function DictatePage() {
       collabActiveRef.current = active;
       collabRoleRef.current = role;
       setCollabParticipantCount(info?.participants?.length ?? 0);
+
+      if (role === 'client' && info?.title && info.title !== useDictationStore.getState().title) {
+        useDictationStore.setState({ title: info.title });
+      }
     });
     return () => { unsub?.(); };
   }, []);
@@ -450,8 +454,9 @@ export function DictatePage() {
       if (!collabDirtyRef.current) return;
       const content = editor.getHTML();
       const name = (() => { try { return localStorage.getItem('ironmic-collab-display-name') || 'Host'; } catch { return 'Host'; } })();
+      const currentTitle = useDictationStore.getState().title || 'New note';
       if (collabRoleRef.current === 'host') {
-        window.ironmic?.meetingCollabNotifySaved?.(content, name)?.catch(() => {});
+        window.ironmic?.meetingCollabNotifySaved?.(content, name, currentTitle)?.catch(() => {});
       } else if (collabRoleRef.current === 'client') {
         window.ironmic?.meetingCollabSaveNotes?.(content)?.catch(() => {});
       }
@@ -474,6 +479,9 @@ export function DictatePage() {
         const html = content.trim().startsWith('<') ? content : `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
         editor.commands.setContent(html, false);
         collabDirtyRef.current = false;
+      }
+      if (collabRoleRef.current === 'client' && data?.title && data.title !== useDictationStore.getState().title) {
+        useDictationStore.setState({ title: data.title });
       }
     });
     return () => { unsub?.(); };
@@ -531,6 +539,12 @@ export function DictatePage() {
     setStoreTitle(finalTitle);
     setIsEditingTitle(false);
 
+      // Broadcast title change immediately if hosting a live collab session
+      if (collabActiveRef.current && collabRoleRef.current === 'host') {
+        const name = (() => { try { return localStorage.getItem('ironmic-collab-display-name') || 'Host'; } catch { return 'Host'; } })();
+        window.ironmic?.meetingCollabNotifySaved?.(editor?.getHTML() ?? '', name, finalTitle)?.catch(() => {});
+      }
+
     let currentId = useDictationStore.getState().entryId;
 
     if (!currentId) {
@@ -571,7 +585,7 @@ export function DictatePage() {
     } catch (err) {
       console.warn('[DictatePage] Failed to persist title rename:', err);
     }
-  }, [localTitle, storeTitle, setStoreTitle]);
+    }, [localTitle, storeTitle, setStoreTitle, editor]);
 
   const finalizeAndReset = useCallback(async (finalStatus: 'draft' | 'done') => {
     if (!editor) return;
@@ -1103,6 +1117,7 @@ export function DictatePage() {
       {collabOpen && (
         <NotesCollaborateModal
           noteId={entryId}
+          noteTitle={displayTitle}
           initialNotes={editor?.getHTML() ?? ''}
           onNotesUpdated={(notes) => {
             if (editor) {

@@ -53,6 +53,7 @@ export interface CollabServerInfo {
   ip: string | null;
   port: number | null;
   sessionCode: string | null;
+  title: string | null;
   /** Invite string for sharing: "ip:port|sessionCode" (IPv6 wrapped in brackets). */
   inviteString: string | null;
   participants: CollabParticipant[];
@@ -75,6 +76,7 @@ class MeetingNotesCollabServerManager {
   private sessionNoteId: string | null = null;
   private hostName: string | null = null;
   private sessionCode: string | null = null;
+  private title: string | null = null;
   private boundIp: string | null = null;
   private boundPort: number | null = null;
   /** True when the bound address is IPv6 — invite string wraps in brackets. */
@@ -98,6 +100,7 @@ class MeetingNotesCollabServerManager {
       ip: this.boundIp,
       port: this.boundPort,
       sessionCode: this.sessionCode,
+      title: this.title,
       inviteString:
         host && this.boundPort && this.sessionCode
           ? `${host}:${this.boundPort}|${this.sessionCode}`
@@ -113,6 +116,7 @@ class MeetingNotesCollabServerManager {
     sessionId: string;
     hostName: string;
     notes: string;
+    title?: string;
     version?: number;
   }): Promise<CollabServerInfo> {
     // Idempotent: if already running for this session, just return current info.
@@ -129,6 +133,7 @@ class MeetingNotesCollabServerManager {
     this.hostName = (opts.hostName || 'Host').slice(0, 64);
     this.currentNotes = opts.notes;
     this.version = opts.version ?? 0;
+    this.title = opts.title ?? null;
     this.sessionCode = this.generateCode();
 
     const detected = this.detectLanAddress();
@@ -181,6 +186,7 @@ class MeetingNotesCollabServerManager {
     this.sessionNoteId = null;
     this.hostName = null;
     this.sessionCode = null;
+    this.title = null;
     this.boundIp = null;
     this.boundPort = null;
     this.boundIsIpv6 = false;
@@ -202,11 +208,12 @@ class MeetingNotesCollabServerManager {
    * Broadcasts the update to all connected participants so they see the
    * latest content without polling.
    */
-  notifyNotesSaved(notes: string, savedBy: string): void {
+  notifyNotesSaved(notes: string, savedBy: string, title?: string): void {
     if (!this.isActive()) return;
     this.currentNotes = notes;
+    if (title) this.title = title;
     this.version++;
-    this.broadcast({ type: 'saved', content: notes, version: this.version, savedBy });
+    this.broadcast({ type: 'saved', content: notes, version: this.version, savedBy, title: this.title });
     this.pushStateToRenderer();
   }
 
@@ -249,6 +256,7 @@ class MeetingNotesCollabServerManager {
         version: this.version,
         participants: Array.from(this.participants.values()),
         hostName: this.hostName,
+        title: this.title,
         participantId,
       });
 
@@ -279,6 +287,7 @@ class MeetingNotesCollabServerManager {
     if (msg.type === 'save_request') {
       const content = String(msg.content ?? '');
       this.currentNotes = content;
+      if (msg.title) this.title = msg.title;
       this.version++;
       // Persist to the host's local DB immediately
       this.persistNotes(content);
@@ -287,6 +296,7 @@ class MeetingNotesCollabServerManager {
         content,
         version: this.version,
         savedBy: state.displayName ?? 'Participant',
+        title: this.title
       };
       // Broadcast the committed version to everyone
       this.broadcast(savedMsg);

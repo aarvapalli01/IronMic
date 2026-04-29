@@ -615,6 +615,7 @@ export function MeetingDetailPage({ sessionId, onBack, onUpdated, openCollabOnMo
               <MeetingCollaboratePanel
                 sessionId={session.id}
                 currentNotes={draftSummary || extractEditableSummary(session)}
+                title={titleText}
                 hostName={parsedStructured?.templateName ? `Host (${parsedStructured.templateName})` : 'Host'}
                 onClose={() => setCollaborateOpen(false)}
                 onNotesUpdated={(notes, savedBy) => {
